@@ -1,0 +1,49 @@
+# ── Secrets ────────────────────────────────────────────────────────────────────
+.env
+.env.local
+*.key
+credentials.json
+service-account.json
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Virtualenv ─────────────────────────────────────────────────────────────────
+.venv/
+venv/
+.uv/
+.python-version
+
+# ── Runtime data ───────────────────────────────────────────────────────────────
+agent/data/
+.pids
+*.pid
+*.log
+cooldown_state.json
+
+# ── Node / Web ─────────────────────────────────────────────────────────────────
+node_modules/
+web/node_modules/
+web/dist/
+dist/
+web/.vite/
+
+# ── IDE / Editor ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── OS / Misc ──────────────────────────────────────────────────────────────────
+*.DS_Store
+Desktop.ini
+*.bak
