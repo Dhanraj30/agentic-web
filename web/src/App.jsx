@@ -2,7 +2,14 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Square, Globe, Zap, ChevronDown, CheckCircle, Loader, AlertCircle, Bot, User, Maximize2, Minimize2 } from 'lucide-react'
 import { useAgentSocket } from './hooks/useAgentSocket'
 
-const SESSION_ID = `web-${Math.random().toString(36).slice(2, 8)}`
+const SESSION_ID = (() => {
+  const key = 'agenticweb.sessionId'
+  const existing = window.localStorage.getItem(key)
+  if (existing) return existing
+  const next = `web-${Math.random().toString(36).slice(2, 8)}`
+  window.localStorage.setItem(key, next)
+  return next
+})()
 
 const PROVIDERS = [
   { id: 'openrouter_qwen', label: 'OR Qwen3 Next', free: true },
@@ -16,8 +23,9 @@ const PROVIDERS = [
   { id: 'openrouter_gemma', label: 'OR Gemma 31B', free: true },
   { id: 'openrouter_minimax', label: 'OR MiniMax M2.5', free: true },
   { id: 'openrouter_free', label: 'OR Free Router', free: true },
+  { id: 'openrouter_auto', label: 'OR Auto Router', free: false },
   { id: 'openrouter_kimi', label: 'OR Kimi K2', free: false },
-  { id: 'openrouter', label: 'OR Custom', free: true },
+  { id: 'openrouter', label: 'OR Custom', free: false },
   { id: 'azure_openai', label: 'Azure OpenAI (Microsoft)', free: false },
   { id: 'gemini',   label: 'Gemma 4 31B IT', free: true  },
   { id: 'groq',     label: 'Groq Llama 3.3',   free: true  },
@@ -95,6 +103,14 @@ export default function App() {
   const inputRef                    = useRef(null)
   const currentMsgId                = useRef(null)
 
+  const updateCurrentAgent = useCallback((patch) => {
+    setMessages(prev => {
+      const targetId = currentMsgId.current ?? [...prev].reverse().find(m => m.role === 'agent' && m.running)?.id
+      if (!targetId) return prev
+      return prev.map(m => m.id === targetId ? { ...m, ...patch(m) } : m)
+    })
+  }, [])
+
   // Scroll to bottom on new messages
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
@@ -113,32 +129,21 @@ export default function App() {
     }
 
     if (event.type === 'done') {
-      setMessages(prev => prev.map(m =>
-        m.id === currentMsgId.current
-          ? { ...m, content: event.result, running: false, logs: m.logs }
-          : m
-      ))
+      updateCurrentAgent(m => ({ content: event.result || m.content || 'Done.', running: false, logs: m.logs }))
       setRunning(false)
       currentMsgId.current = null
       return
     }
 
     if (event.type === 'error') {
-      setMessages(prev => prev.map(m =>
-        m.id === currentMsgId.current
-          ? { ...m, content: `Error: ${event.message}`, running: false }
-          : m
-      ))
+      updateCurrentAgent(() => ({ content: `Error: ${event.message}`, running: false }))
       setRunning(false)
+      currentMsgId.current = null
       return
     }
 
     if (event.type === 'cancelled') {
-      setMessages(prev => prev.map(m =>
-        m.id === currentMsgId.current
-          ? { ...m, content: event.message || 'Cancelled by user.', running: false }
-          : m
-      ))
+      updateCurrentAgent(() => ({ content: event.message || 'Cancelled by user.', running: false }))
       setRunning(false)
       currentMsgId.current = null
       return
@@ -152,9 +157,19 @@ export default function App() {
           : m
       ))
     }
-  }, [])
+  }, [updateCurrentAgent])
 
-  const { connected, send } = useAgentSocket(SESSION_ID, onEvent)
+  const onDisconnect = useCallback(() => {
+    if (!currentMsgId.current) return
+    updateCurrentAgent(m => ({
+      content: m.content || 'Connection lost while the agent was working. Please retry the task.',
+      running: false,
+    }))
+    setRunning(false)
+    currentMsgId.current = null
+  }, [updateCurrentAgent])
+
+  const { connected, send } = useAgentSocket(SESSION_ID, onEvent, onDisconnect)
 
   const stop = useCallback(() => {
     if (!running || !connected) return

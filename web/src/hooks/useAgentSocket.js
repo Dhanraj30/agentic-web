@@ -2,11 +2,13 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 
 const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000'
 
-export function useAgentSocket(sessionId, onEvent) {
+export function useAgentSocket(sessionId, onEvent, onDisconnect) {
   const ws = useRef(null)
   const [connected, setConnected] = useState(false)
   const onEventRef = useRef(onEvent)
+  const onDisconnectRef = useRef(onDisconnect)
   onEventRef.current = onEvent
+  onDisconnectRef.current = onDisconnect
 
   const connect = useCallback(() => {
     if (ws.current?.readyState === WebSocket.OPEN) return
@@ -28,6 +30,7 @@ export function useAgentSocket(sessionId, onEvent) {
     socket.onclose = () => {
       setConnected(false)
       clearInterval(socket._ping)
+      onDisconnectRef.current?.()
       // reconnect after 2s
       setTimeout(connect, 2000)
     }
