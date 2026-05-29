@@ -92,6 +92,9 @@ async def type_text(selector: str, text: str) -> str:
             return f"Typed into {selector}"
         except Exception:
             continue
+    editor_result = await _type_into_code_editor(page, text)
+    if editor_result:
+        return editor_result
     return f"Could not type into '{selector}'"
 
 
@@ -162,3 +165,64 @@ async def _visible_text(page, limit: int = 3500) -> str:
         }
     """)
     return " ".join(content.split())[:limit]
+
+
+async def _type_into_code_editor(page, text: str) -> str:
+    try:
+        editor_api = await page.evaluate(
+            """value => {
+                const monacoModels = window.monaco?.editor?.getModels?.();
+                if (monacoModels && monacoModels.length) {
+                    monacoModels[0].setValue(value);
+                    return 'monaco';
+                }
+                const codeMirrorHost = document.querySelector('.CodeMirror');
+                if (codeMirrorHost?.CodeMirror) {
+                    codeMirrorHost.CodeMirror.setValue(value);
+                    return 'codemirror5';
+                }
+                const cmContent = document.querySelector('.cm-content[contenteditable="true"]');
+                if (cmContent) {
+                    cmContent.textContent = value;
+                    cmContent.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+                    return 'codemirror6';
+                }
+                if (window.ace) {
+                    const aceEditor = window.ace.edit(document.querySelector('.ace_editor'));
+                    if (aceEditor) {
+                        aceEditor.setValue(value, -1);
+                        return 'ace';
+                    }
+                }
+                return '';
+            }""",
+            text,
+        )
+        if editor_api:
+            return f"Typed into code editor via {editor_api}"
+    except Exception:
+        pass
+
+    editor_selectors = [
+        ".monaco-editor textarea",
+        ".monaco-editor",
+        ".cm-content",
+        ".CodeMirror textarea",
+        ".ace_text-input",
+        "[contenteditable='true']",
+        "textarea",
+    ]
+    for selector in editor_selectors:
+        try:
+            locator = page.locator(selector).first
+            if not await locator.count():
+                continue
+            await locator.click(force=True)
+            await page.keyboard.press("Control+A")
+            await page.keyboard.press("Backspace")
+            await page.keyboard.insert_text(text)
+            await page.wait_for_timeout(300)
+            return f"Typed into code editor via {selector}"
+        except Exception:
+            continue
+    return ""

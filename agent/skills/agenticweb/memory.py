@@ -45,6 +45,20 @@ async def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_memory_items_session_ts
                 ON memory_items(session_id, ts DESC);
+            CREATE TABLE IF NOT EXISTS context_notes (
+                session_id TEXT PRIMARY KEY,
+                notes TEXT,
+                updated_at REAL
+            );
+            CREATE TABLE IF NOT EXISTS context_refs (
+                session_id TEXT,
+                value TEXT,
+                ref_type TEXT,
+                label TEXT,
+                used INTEGER DEFAULT 0,
+                updated_at REAL,
+                PRIMARY KEY (session_id, value)
+            );
         """)
         await db.commit()
 
@@ -174,14 +188,14 @@ async def recall_memory_context(session_id: str, goal: str, limit: int = 8) -> s
     for kind, content, ts in rows:
         if _is_bad_memory(content):
             continue
-        score = _score(query_tokens, content)
+        relevance = _score(query_tokens, content)
+        if relevance <= 0:
+            continue
         recency_bonus = max(0.0, 1.0 - ((time.time() - float(ts)) / 86400.0)) if ts else 0.0
-        scored.append((score + recency_bonus, kind, content))
+        scored.append((relevance + (recency_bonus * 0.15), kind, content))
 
     scored.sort(key=lambda item: item[0], reverse=True)
-    selected = [item for item in scored if item[0] > 0][:limit]
-    if not selected:
-        selected = scored[: min(3, len(scored))]
+    selected = scored[:limit]
 
     lines: list[str] = []
     if selected:
@@ -237,6 +251,63 @@ async def handle_memory_request(session_id: str, goal: str) -> str | None:
         key, value = best
         return f"Your {key} is {value}."
     return None
+
+
+async def save_context_notes(session_id: str, notes: dict) -> None:
+    await init_db()
+    async with _db() as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO context_notes VALUES (?,?,?)",
+            (session_id, json.dumps(notes), time.time()),
+        )
+        await db.commit()
+
+
+async def load_context_notes(session_id: str) -> dict | None:
+    await init_db()
+    async with _db() as db:
+        cur = await db.execute(
+            "SELECT notes FROM context_notes WHERE session_id=?",
+            (session_id,),
+        )
+        row = await cur.fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row[0])
+    except Exception:
+        return None
+
+
+async def save_context_reference(session_id: str, ref: dict) -> None:
+    await init_db()
+    async with _db() as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO context_refs VALUES (?,?,?,?,?,?)",
+            (
+                session_id,
+                str(ref.get("value", "")),
+                str(ref.get("type", "")),
+                str(ref.get("label", "")),
+                1 if ref.get("used") else 0,
+                time.time(),
+            ),
+        )
+        await db.commit()
+
+
+async def load_context_references(session_id: str) -> list[dict]:
+    await init_db()
+    async with _db() as db:
+        cur = await db.execute(
+            "SELECT ref_type,value,label,used FROM context_refs WHERE session_id=? ORDER BY updated_at DESC",
+            (session_id,),
+        )
+        rows = await cur.fetchall()
+    return [
+        {"type": row[0], "value": row[1], "label": row[2], "used": bool(row[3])}
+        for row in rows
+    ]
 
 
 def _tokens(text: str) -> set[str]:

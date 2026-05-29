@@ -23,12 +23,15 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from .browser import take_screenshot as _take_screenshot
+from .context_manager import ContextManager, parse_references_from_search_result
 from .llm_router import OPENROUTER_FREE_PROVIDERS, build_langchain_llm, cooldown, provider_fallback_chain
 from .memory import complete_session, create_session, handle_memory_request, log_step, recall_memory_context, record_task_summary
 from .mcp_tools.client import get_mcp_tools
 
 logger = logging.getLogger(__name__)
 MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", "5"))
+TOOL_ROUTER_UNRELIABLE_PROVIDERS = {"openrouter_free"}
+context_manager = ContextManager()
 
 SYSTEM_PROMPT = """You are AgenticWeb — an autonomous web agent with MCP tools to browse, search, scrape, extract, and interact with web pages.
 
@@ -39,6 +42,8 @@ Rules:
 - If a site blocks interaction or a selector fails, switch source or summarise what was gathered instead of retrying the same form
 - browse for JS-heavy sites, scrape for static pages
 - extract only after browse/page_state, because it reads the current live browser page; do not use extract on scrape output
+- If the same selector/action fails twice, stop retrying that selector. Switch strategy or explain the blocker.
+- If a site requires login or premium access, report that limitation and use public sources or local reasoning instead of looping.
 - Do NOT complete purchases, payments, bookings, or account changes
 - Never fabricate data — report real prices, URLs, names
 - Be concise. Show progress. Move fast."""
@@ -61,12 +66,17 @@ async def act_node(state: AgentState, config: RunnableConfig) -> dict:
     await q.put({"type": "status", "message": f"Thinking… (step {iteration})"})
 
     tools = get_mcp_tools()
+    session_id = state["session_id"]
+    if context_manager.should_compact(session_id):
+        await q.put({"type": "status", "message": "Compacting context..."})
+        await context_manager.compact(session_id)
     msgs = list(state["messages"])
     if len(msgs) > 6:
         msgs = [msgs[0]] + msgs[-5:]
     memory = state.get("memory_context", "")
     system_prompt = SYSTEM_PROMPT if not memory else f"{SYSTEM_PROMPT}\n\n{memory}"
-    messages = [SystemMessage(content=system_prompt)] + msgs
+    context_messages = context_manager.build_messages_for_llm(session_id, system_prompt)
+    messages = [context_messages[0] if context_messages else SystemMessage(content=system_prompt)] + msgs
     try:
         response: AIMessage = await _invoke_with_provider_fallback(
             messages=messages,
@@ -79,6 +89,7 @@ async def act_node(state: AgentState, config: RunnableConfig) -> dict:
             await q.put({"type": "status", "message": "LLM unavailable; using gathered results."})
             return {"messages": [AIMessage(content="")], "iteration": iteration}
         raise
+    context_manager.append_message(session_id, response)
     return {"messages": [response], "iteration": iteration}
 
 
@@ -97,6 +108,9 @@ async def observe_node(state: AgentState) -> dict:
 
     result = await tool_node.ainvoke({"messages": state["messages"]})
     new_messages = result.get("messages", [])
+    ctx = context_manager.get(state["session_id"])
+    if ctx:
+        ctx.step_count = step
 
     browser_tools = {"browse", "click", "type_text", "press_key", "wait", "page_state", "extract"}
     for msg in new_messages:
@@ -105,6 +119,17 @@ async def observe_node(state: AgentState) -> dict:
             snippet = str(msg.content)[:300]
             await q.put({"type": "step", "step": step, "tool": tool_name, "result": snippet})
             await log_step(state["session_id"], step, tool_name, "call", {}, snippet, "done")
+            await context_manager.update_notes(state["session_id"], str(msg.content), tool_name)
+            if tool_name == "search_web":
+                for ref in parse_references_from_search_result(str(msg.content)):
+                    await context_manager.add_reference(state["session_id"], ref["type"], ref["value"], ref["label"])
+            if tool_name in {"browse", "scrape"}:
+                for url in _urls_from_text(str(msg.content)):
+                    await context_manager.mark_reference_used(state["session_id"], url)
+            context_manager.append_message(
+                state["session_id"],
+                ToolMessage(content=str(msg.content)[:500], tool_call_id=getattr(msg, "tool_call_id", "") or "tool", name=tool_name),
+            )
             msg.content = str(msg.content)[:2000]
             if tool_name in browser_tools:
                 b64 = await _take_screenshot()
@@ -131,15 +156,19 @@ async def summarise_node(state: AgentState, config: RunnableConfig) -> dict:
         msgs = [msgs[0]] + msgs[-3:]
     evidence = _tool_evidence(state)
     evidence_block = _format_evidence_block(evidence)
+    ctx = context_manager.get(state["session_id"])
+    structured_notes = _format_notes_for_summary(ctx.notes if ctx else {})
     msgs.append(HumanMessage(content=(
         f"Goal: {state['goal']}\n"
+        f"Structured session notes:\n{structured_notes}\n\n"
         f"Tool evidence gathered across the whole run:\n{evidence_block}\n\n"
         "Write the final answer using only the tool evidence in this conversation.\n"
         "Rules:\n"
-        "- Do not invent prices, dates, availability, rankings, or source names.\n"
-        "- If a price appears only in a search result title/snippet, label it as search-result text, not a verified live price.\n"
+        "- Do not invent prices, dates, availability, rankings, source names, company tags, execution output, or hidden page data.\n"
+        "- If a page requires login or premium access, say that directly and do not guess hidden data.\n"
+        "- Mention live prices only when the user asked for prices or the evidence contains prices.\n"
         "- Include source URLs beside each claim when possible.\n"
-        "- If comparison data is incomplete, say exactly what was checked and what still needs live confirmation.\n"
+        "- If comparison/data collection is incomplete, say exactly what was checked and what remains unverified.\n"
         "- Format cleanly with: Result, Sources Checked, Limitations."
     )))
     try:
@@ -203,6 +232,10 @@ def _is_provider_unavailable(exc: Exception) -> bool:
         or "support tool use" in text
         or "temporarily rate-limited upstream" in text
         or "provider returned error" in text
+        or "tool_use_failed" in text
+        or "failed_generation" in text
+        or "failed to call a function" in text
+        or "<function=" in text
         or "does not support image input" in text
         or "cannot read" in text and "clipboard" in text
     )
@@ -227,6 +260,9 @@ async def _invoke_with_provider_fallback(
     openrouter_free_exhausted = False
     for index, candidate in enumerate(provider_fallback_chain(provider)):
         if openrouter_free_exhausted and candidate in OPENROUTER_FREE_PROVIDERS:
+            continue
+        if tools and candidate in TOOL_ROUTER_UNRELIABLE_PROVIDERS:
+            logger.info("Skipping provider %s for tool use; using tool-capable fallback.", candidate)
             continue
         if index:
             await q.put({"type": "status", "message": f"Trying fallback provider: {candidate}"})
@@ -266,7 +302,7 @@ def _fallback_summary(state: AgentState, reason: str = "The agent could not comp
 
     lines = [
         "Result",
-        f"{reason} I can only report the evidence gathered from tools; I will not invent missing live prices.",
+        f"{reason} I can only report the evidence gathered from tools; I will not invent missing details.",
         "",
         "Sources Checked",
     ]
@@ -275,8 +311,8 @@ def _fallback_summary(state: AgentState, reason: str = "The agent could not comp
     lines.extend([
         "",
         "Limitations",
-        "- Treat search-result snippets as leads, not confirmed live prices or availability.",
-        "- Re-run with a specific site if you need booking-grade live pricing.",
+        "- Treat search-result snippets as leads, not confirmed page content.",
+        "- Re-run with a more specific source or logged-in browser session if the target site blocks access.",
     ])
     return "\n".join(lines)
 
@@ -308,11 +344,19 @@ def _answer_ignores_evidence(answer: str, evidence: list[str]) -> bool:
     if not evidence:
         return False
     lowered = answer.lower()
+    evidence_text = " ".join(evidence).lower()
     if "sources checked" in lowered and "- none" in lowered:
         return True
     if "no flight price information" in lowered and _evidence_contains_price_or_fare(evidence):
         return True
     if "no live price data" in lowered and _evidence_contains_price_or_fare(evidence):
+        return True
+    company_names = ("google", "amazon", "facebook", "meta", "microsoft", "apple", "netflix")
+    if "company" in lowered or "companies" in lowered:
+        invented_companies = [name for name in company_names if name in lowered and name not in evidence_text]
+        if invented_companies:
+            return True
+    if "successfully executed" in lowered and not any(token in evidence_text for token in ("execution successful", "output", "stdout", "compiled successfully")):
         return True
     return False
 
@@ -383,6 +427,7 @@ async def run_agent(
     q: asyncio.Queue = asyncio.Queue()
     yield {"type": "status", "message": "Initialising agent…"}
     await create_session(session_id, goal, provider or os.getenv("AGENT_PROVIDER", "gemini"))
+    await context_manager.create(session_id, goal, provider or os.getenv("AGENT_PROVIDER", "gemini"))
     memory_answer = await handle_memory_request(session_id, goal)
     if memory_answer:
         await complete_session(session_id, memory_answer)
@@ -440,3 +485,21 @@ def _describe(tool_name: str, args: dict) -> str:
         "extract":    lambda a: f"Extracting: {a.get('instruction','...')}",
     }
     return m.get(tool_name, lambda a: f"Running {tool_name}")(args)
+
+
+def _urls_from_text(text: str) -> list[str]:
+    import re
+    return [m.rstrip(".,)") for m in re.findall(r"https?://\S+", str(text))]
+
+
+def _format_notes_for_summary(notes: dict) -> str:
+    if not notes:
+        return "none"
+    lines = []
+    for key in ("goal", "tried", "found", "pending", "best_so_far"):
+        values = notes.get(key, [])
+        if not values:
+            lines.append(f"- {key}: none")
+        else:
+            lines.append(f"- {key}: " + "; ".join(str(v) for v in values[-8:]))
+    return "\n".join(lines)

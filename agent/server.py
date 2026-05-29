@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from skills.agenticweb.agent_loop import run_agent
+from skills.agenticweb.agent_loop import context_manager
 from skills.agenticweb.llm_router import LLMRouter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
@@ -81,6 +82,14 @@ async def providers():
             {"id":"openai",   "name":"GPT-4o Mini",         "free": False},
         ],
     }
+
+
+@app.get("/debug/context/{session_id}")
+async def debug_context(session_id: str):
+    context = context_manager.as_dict(session_id)
+    if not context:
+        raise HTTPException(404, "context not found in this process")
+    return context
 
 
 @app.get("/graph")

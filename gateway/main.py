@@ -42,6 +42,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agent.skills.agenticweb.agent_loop import run_agent
+from agent.skills.agenticweb.agent_loop import context_manager
 from agent.skills.agenticweb.llm_router import LLMRouter
 
 logging.basicConfig(
@@ -289,6 +290,14 @@ async def providers():
             {"id": "openai",   "name": "GPT-4o Mini",         "free": False},
         ],
     }
+
+
+@app.get("/debug/context/{session_id}")
+async def debug_context(session_id: str):
+    context = context_manager.as_dict(session_id)
+    if not context:
+        raise HTTPException(404, "context not found")
+    return context
 
 
 # ── Telegram webhook ──────────────────────────────────────────────────────────
