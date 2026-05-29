@@ -35,6 +35,15 @@ OPENROUTER_FREE_PROVIDERS = {
     "openrouter_deepseek",
 }
 
+OPENROUTER_PAID_PROVIDERS = {
+    "openrouter",
+    "openrouter_auto",
+    "openrouter_kimi",
+}
+
+FREE_PROVIDERS = OPENROUTER_FREE_PROVIDERS | {"gemini", "groq"}
+PAID_PROVIDERS = OPENROUTER_PAID_PROVIDERS | {"azure_openai", "deepseek", "claude", "openai"}
+
 FALLBACK_ORDER = [
     "openrouter_fast",
     "openrouter_nemotron",
@@ -75,6 +84,7 @@ KEY_MAP = {
     "openrouter_minimax": "OPENROUTER_API_KEY",
     "openrouter_qwen": "OPENROUTER_API_KEY",
     "openrouter_qwen_coder": "OPENROUTER_API_KEY",
+    "openrouter_auto": "OPENROUTER_API_KEY",
     "openrouter_kimi": "OPENROUTER_API_KEY",
     "openrouter_deepseek": "OPENROUTER_API_KEY",
 }
@@ -96,6 +106,7 @@ OPENROUTER_MODELS = {
     "openrouter_minimax": "minimax/minimax-m2.5:free",
     "openrouter_qwen": "qwen/qwen3-next-80b-a3b-instruct:free",
     "openrouter_qwen_coder": "qwen/qwen3-coder:free",
+    "openrouter_auto": "openrouter/auto",
     "openrouter_kimi": "moonshotai/kimi-k2-thinking",
     "openrouter_deepseek": "deepseek/deepseek-v4-flash:free",
 }
@@ -223,13 +234,15 @@ class LLMRouter:
             from openai import OpenAI
             client = OpenAI(api_key=_get_api_key("OPENROUTER_API_KEY"), base_url=OPENROUTER_BASE_URL)
             all_msgs = ([{"role": "system", "content": system}] if system else []) + messages
-            return client.chat.completions.create(
+            response = client.chat.completions.create(
                 model=OPENROUTER_MODELS.get(name, OPENROUTER_MODELS["openrouter"]),
                 messages=all_msgs,
                 extra_headers=_openrouter_headers(),
                 timeout=OPENROUTER_TIMEOUT,
                 max_tokens=OPENROUTER_MAX_TOKENS,
-            ).choices[0].message.content
+            )
+            logger.info("OpenRouter provider %s served by model %s", name, getattr(response, "model", "unknown"))
+            return response.choices[0].message.content
 
         raise ValueError(f"Unknown provider: {name}")
 
@@ -298,7 +311,7 @@ def build_langchain_llm(provider: Optional[str] = None):
 def provider_fallback_chain(provider: Optional[str] = None) -> list[str]:
     """Return the ordered list of providers that have keys and are not on cooldown."""
     target = provider or os.getenv("AGENT_PROVIDER", "gemini")
-    chain = [target] + [p for p in FALLBACK_ORDER if p != target]
+    chain = _cost_aware_chain(target)
     available = [name for name in chain if _has_api_key(KEY_MAP.get(name, ""))]
     return cooldown.available(available)
 
@@ -306,13 +319,25 @@ def provider_fallback_chain(provider: Optional[str] = None) -> list[str]:
 def _effective_fallback_chain(provider: Optional[str] = None) -> list[str]:
     """Build fallback chain: target first, then cooldown-aware order."""
     target = provider or os.getenv("AGENT_PROVIDER", "gemini")
-    chain = [target] + [p for p in FALLBACK_ORDER if p != target]
+    chain = _cost_aware_chain(target)
     available = [name for name in chain if _has_api_key(KEY_MAP.get(name, ""))]
     result = cooldown.available(available)
     if not result:
         logger.warning("All providers on cooldown! Trying anyway: %s", available[:3])
         result = available[:3]
     return result
+
+
+def _cost_aware_chain(target: str) -> list[str]:
+    """Keep free-mode traffic out of paid models unless explicitly allowed."""
+    allow_paid = os.getenv("ALLOW_PAID_FALLBACKS", "").lower() in {"1", "true", "yes", "on"}
+    if target in PAID_PROVIDERS:
+        allow_paid = True
+
+    ordered = [target] + [p for p in FALLBACK_ORDER if p != target]
+    if allow_paid:
+        return ordered
+    return [p for p in ordered if p == target or p not in PAID_PROVIDERS]
 
 
 def _openrouter_headers() -> dict[str, str]:

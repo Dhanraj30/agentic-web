@@ -27,10 +27,13 @@ AGENT_PROVIDER=gemini
 | `openrouter_gemma` | `google/gemma-4-31b-it:free` | Gemma via OpenRouter free endpoint |
 | `openrouter_minimax` | `minimax/minimax-m2.5:free` | Another current free fallback |
 | `openrouter_free` | `openrouter/free` | Lets OpenRouter pick an available free model |
+| `openrouter_auto` | `openrouter/auto` | Paid/cost-variable auto router; no extra routing fee, billed as the selected model |
 | `openrouter_kimi` | `moonshotai/kimi-k2-thinking` | Strong reasoning, not currently free in OpenRouter catalog |
 | `openrouter` | value of `OPENROUTER_MODEL` | Custom OpenRouter model ID |
 
 OpenRouter uses the OpenAI-compatible endpoint `https://openrouter.ai/api/v1`.
+`openrouter_auto` is intentionally opt-in and is not used as a fallback from free providers, so free traffic does not silently become paid auto-routed traffic.
+Paid fallbacks are disabled by default. Set `ALLOW_PAID_FALLBACKS=true` only if you want free providers to fall through to paid providers when free quotas or endpoints fail.
 
 ## Other Providers
 

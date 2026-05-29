@@ -72,8 +72,10 @@ Open `http://localhost:3000` and type a goal.
 |---|---|---|
 | `gemini` (default) | `GEMINI_API_KEY` | ✅ |
 | `openrouter_qwen` | `OPENROUTER_API_KEY` | ✅ |
-| `openrouter_kimi` | `OPENROUTER_API_KEY` | ✅ |
 | `openrouter_deepseek` | `OPENROUTER_API_KEY` | ✅ |
+| `openrouter_free` | `OPENROUTER_API_KEY` | ✅ |
+| `openrouter_auto` | `OPENROUTER_API_KEY` | paid, auto-routed |
+| `openrouter_kimi` | `OPENROUTER_API_KEY` | paid |
 | `groq` | `GROQ_API_KEY` | ✅ |
 | `deepseek` | `DEEPSEEK_API_KEY` | cheap |
 | `claude` | `ANTHROPIC_API_KEY` | paid |
