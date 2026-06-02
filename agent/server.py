@@ -75,6 +75,7 @@ async def providers():
             {"id":"openrouter_auto", "name":"OpenRouter Auto Router", "free": False},
             {"id":"openrouter_kimi", "name":"OpenRouter Kimi K2 Thinking", "free": False},
             {"id":"openrouter", "name":"OpenRouter Custom Model", "free": False},
+            {"id":"github", "name":"GitHub Models / GPT-4o-mini (Microsoft)", "free": True},
             {"id":"gemini",   "name":"Gemma 4 31B IT",     "free": True},
             {"id":"groq",     "name":"Groq Llama 3.3 70B", "free": True},
             {"id":"deepseek", "name":"DeepSeek V4 Flash",    "free": False},

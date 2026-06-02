@@ -283,6 +283,7 @@ async def providers():
             {"id": "openrouter_kimi", "name": "OpenRouter Kimi K2 Thinking", "free": False},
             {"id": "openrouter", "name": "OpenRouter Custom Model", "free": False},
             {"id": "azure_openai", "name": "Azure OpenAI (Microsoft Stack)", "free": False},
+            {"id": "github", "name": "GitHub Models / GPT-4o-mini (Microsoft)", "free": True},
             {"id": "gemini",   "name": "Gemma 4 31B IT",     "free": True},
             {"id": "groq",     "name": "Groq Llama 3.3 70B", "free": True},
             {"id": "deepseek", "name": "DeepSeek V4 Flash",    "free": False},
@@ -326,7 +327,7 @@ async def telegram_webhook(request: Request):
             "• Find cheapest flight BLR to GOI this Friday\n"
             "• What's the gold price in India today?\n"
             "• Summarise top HackerNews stories\n\n"
-            "Commands: /start /status /provider gemini|groq|deepseek|claude|openai"
+            "Commands: /start /status /provider github|gemini|groq|deepseek|claude|openai"
         )
         return JSONResponse({"ok": True})
 

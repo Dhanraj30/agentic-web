@@ -41,10 +41,13 @@ OPENROUTER_PAID_PROVIDERS = {
     "openrouter_kimi",
 }
 
-FREE_PROVIDERS = OPENROUTER_FREE_PROVIDERS | {"gemini", "groq"}
+FREE_PROVIDERS = OPENROUTER_FREE_PROVIDERS | {"gemini", "github", "groq"}
 PAID_PROVIDERS = OPENROUTER_PAID_PROVIDERS | {"azure_openai", "deepseek", "claude", "openai"}
 
 FALLBACK_ORDER = [
+    "gemini",
+    "github",
+    "groq",
     "openrouter_fast",
     "openrouter_nemotron",
     "openrouter_glm",
@@ -59,8 +62,6 @@ FALLBACK_ORDER = [
     "openrouter_deepseek",
     "openrouter",
     "azure_openai",
-    "gemini",
-    "groq",
     "deepseek",
     "claude",
     "openai",
@@ -68,6 +69,7 @@ FALLBACK_ORDER = [
 
 KEY_MAP = {
     "gemini":   "GEMINI_API_KEY",
+    "github":   "GITHUB_TOKEN",
     "groq":     "GROQ_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "claude":   "ANTHROPIC_API_KEY",
@@ -90,6 +92,8 @@ KEY_MAP = {
 }
 
 DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemma-4-31b-it")
+GITHUB_MODELS_BASE_URL = "https://models.inference.ai.azure.com"
+GITHUB_MODEL = os.getenv("GITHUB_MODEL", "gpt-4o-mini")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
@@ -201,6 +205,12 @@ class LLMRouter:
             all_msgs = ([{"role": "system", "content": system}] if system else []) + messages
             return client.chat.completions.create(model="llama-3.3-70b-versatile", messages=all_msgs, max_tokens=2048).choices[0].message.content
 
+        elif name == "github":
+            from openai import OpenAI
+            client = OpenAI(api_key=_get_api_key("GITHUB_TOKEN"), base_url=GITHUB_MODELS_BASE_URL)
+            all_msgs = ([{"role": "system", "content": system}] if system else []) + messages
+            return client.chat.completions.create(model=GITHUB_MODEL, messages=all_msgs, max_tokens=2048).choices[0].message.content
+
         elif name == "deepseek":
             from openai import OpenAI
             client = OpenAI(api_key=_get_api_key("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
@@ -270,6 +280,15 @@ def build_langchain_llm(provider: Optional[str] = None):
             elif name == "groq":
                 from langchain_groq import ChatGroq
                 return ChatGroq(model="llama-3.3-70b-versatile", api_key=_get_api_key("GROQ_API_KEY"), temperature=0)
+            elif name == "github":
+                from langchain_openai import ChatOpenAI
+                return ChatOpenAI(
+                    model=GITHUB_MODEL,
+                    api_key=_get_api_key("GITHUB_TOKEN"),
+                    base_url=GITHUB_MODELS_BASE_URL,
+                    temperature=0,
+                    max_retries=2,
+                )
             elif name == "deepseek":
                 from langchain_openai import ChatOpenAI
                 return ChatOpenAI(model="deepseek-chat", api_key=_get_api_key("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com", temperature=0)
@@ -305,7 +324,7 @@ def build_langchain_llm(provider: Optional[str] = None):
             logger.warning(f"LangChain init failed for {name}: {e}")
             continue
 
-    raise RuntimeError("No LLM provider available. Add at least GEMINI_API_KEY to .env (free).")
+    raise RuntimeError("No LLM provider available. Add GITHUB_TOKEN or another provider key to .env.")
 
 
 def provider_fallback_chain(provider: Optional[str] = None) -> list[str]:

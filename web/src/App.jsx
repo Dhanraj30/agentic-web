@@ -12,6 +12,7 @@ const SESSION_ID = (() => {
 })()
 
 const PROVIDERS = [
+  { id: 'github', label: 'GitHub Models - GPT-4o-mini (Microsoft)', free: true },
   { id: 'openrouter_qwen', label: 'OR Qwen3 Next', free: true },
   { id: 'openrouter_qwen_coder', label: 'OR Qwen3 Coder', free: true },
   { id: 'openrouter_deepseek', label: 'OR DeepSeek V4', free: true },
@@ -88,7 +89,7 @@ function Message({ msg }) {
 export default function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [provider, setProvider] = useState('openrouter_free')
+  const [provider, setProvider] = useState('github')
   const [showProviders, setShowProv] = useState(false)
   const [running, setRunning] = useState(false)
   const [health, setHealth] = useState(null)
@@ -229,14 +230,14 @@ export default function App() {
           </button>
 
           {showProviders && (
-            <div className="absolute right-0 top-9 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1">
+            <div className="absolute right-0 top-10 w-72 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-5.5rem)] overflow-y-auto overscroll-contain bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 scrollbar-thin">
               {PROVIDERS.map(p => (
                 <button key={p.id}
                   onClick={() => { setProvider(p.id); setShowProv(false); send({ type: 'set_provider', provider: p.id }) }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex justify-between items-center transition-colors ${p.id === provider ? 'text-slate-950 font-medium' : 'text-slate-600'}`}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 flex gap-3 justify-between items-center transition-colors ${p.id === provider ? 'text-slate-950 font-medium' : 'text-slate-600'}`}
                 >
-                  {p.label}
-                  {p.free && <span className="text-xs text-emerald-600">free</span>}
+                  <span className="min-w-0 truncate">{p.label}</span>
+                  {p.free && <span className="text-xs text-emerald-600 shrink-0">free</span>}
                 </button>
               ))}
             </div>
