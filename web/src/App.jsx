@@ -26,33 +26,33 @@ const PROVIDERS = [
   { id: 'openrouter_auto', label: 'OR Auto Router', free: false },
   { id: 'openrouter_kimi', label: 'OR Kimi K2', free: false },
   { id: 'openrouter', label: 'OR Custom', free: false },
-  { id: 'azure_openai', label: 'Azure OpenAI (Microsoft)', free: false },
-  { id: 'gemini',   label: 'Gemma 4 31B IT', free: true  },
-  { id: 'groq',     label: 'Groq Llama 3.3',   free: true  },
-  { id: 'deepseek', label: 'DeepSeek V4 Flash',  free: false },
-  { id: 'claude',   label: 'Claude Sonnet',     free: false },
-  { id: 'openai',   label: 'GPT-4o Mini',       free: false },
+  { id: 'azure_openai', label: 'Azure OpenAI', free: false },
+  { id: 'gemini', label: 'Gemma 4 31B IT', free: true },
+  { id: 'groq', label: 'Groq Llama 3.3', free: true },
+  { id: 'deepseek', label: 'DeepSeek V4 Flash', free: false },
+  { id: 'claude', label: 'Claude Sonnet', free: false },
+  { id: 'openai', label: 'GPT-4o Mini', free: false },
 ]
 
 const SUGGESTIONS = [
-  'Find cheapest flight BLR to GOA this Friday under ₹4000',
+  'Find cheapest flight BLR to GOA this Friday under Rs.4000',
   'What is the current gold price in India?',
-  'Summarise top 5 HackerNews stories today',
+  'Summarize top 5 Hacker News stories today',
   'Compare iPhone 16 Pro price on Flipkart vs Amazon India',
 ]
 
 function StatusLine({ event }) {
   const icons = {
-    status: <Loader size={12} className="animate-spin text-yellow-400 shrink-0 mt-0.5" />,
-    step:   <CheckCircle size={12} className="text-green-400 shrink-0 mt-0.5" />,
-    error:  <AlertCircle size={12} className="text-red-400 shrink-0 mt-0.5" />,
+    status: <Loader size={12} className="animate-spin text-amber-500 shrink-0 mt-0.5" />,
+    step: <CheckCircle size={12} className="text-emerald-500 shrink-0 mt-0.5" />,
+    error: <AlertCircle size={12} className="text-red-500 shrink-0 mt-0.5" />,
   }
   return (
-    <div className="flex gap-2 items-start font-mono text-xs text-gray-400 py-0.5">
+    <div className="flex gap-2 items-start font-mono text-[11px] text-slate-500 py-0.5">
       {icons[event.type] || null}
       <span>
         {event.type === 'step'
-          ? `Step ${event.step} [${event.tool}] → ${event.result?.slice(0, 100)}`
+          ? `Step ${event.step} [${event.tool}] -> ${event.result?.slice(0, 100)}`
           : event.message || event.result?.slice(0, 120)}
       </span>
     </div>
@@ -63,26 +63,21 @@ function Message({ msg }) {
   const isUser = msg.role === 'user'
   return (
     <div className={`flex gap-3 items-start ${isUser ? 'flex-row-reverse' : ''}`}>
-      {/* Avatar */}
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isUser ? 'bg-indigo-600' : 'bg-violet-700'}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm ${isUser ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}>
         {isUser ? <User size={14} /> : <Bot size={14} />}
       </div>
 
-      {/* Bubble */}
-      <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
-        {/* Agent log lines */}
+      <div className={`max-w-[min(80%,720px)] rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${isUser ? 'bg-sky-600 text-white' : 'bg-white text-slate-800 border border-slate-200'}`}>
         {msg.logs?.length > 0 && (
-          <div className="mb-3 space-y-0.5 border-b border-gray-700 pb-3">
+          <div className="mb-3 space-y-0.5 border-b border-slate-200 pb-3">
             {msg.logs.map((e, i) => <StatusLine key={i} event={e} />)}
           </div>
         )}
-        {/* Main content */}
         {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
-        {/* Running indicator */}
         {msg.running && !msg.content && (
-          <div className="flex gap-1 items-center text-gray-400 text-xs">
+          <div className="flex gap-1.5 items-center text-slate-500 text-xs">
             <Loader size={12} className="animate-spin" />
-            <span>Working…</span>
+            <span>Working...</span>
           </div>
         )}
       </div>
@@ -91,17 +86,17 @@ function Message({ msg }) {
 }
 
 export default function App() {
-  const [messages, setMessages]     = useState([])
-  const [input, setInput]           = useState('')
-  const [provider, setProvider]     = useState('openrouter_free')
-  const [showProviders, setShowProv]= useState(false)
-  const [running, setRunning]       = useState(false)
-  const [health, setHealth]         = useState(null)
-  const [canvasImg, setCanvasImg]   = useState(null)
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [provider, setProvider] = useState('openrouter_free')
+  const [showProviders, setShowProv] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [health, setHealth] = useState(null)
+  const [canvasImg, setCanvasImg] = useState(null)
   const [canvasOpen, setCanvasOpen] = useState(false)
-  const bottomRef                   = useRef(null)
-  const inputRef                    = useRef(null)
-  const currentMsgId                = useRef(null)
+  const bottomRef = useRef(null)
+  const inputRef = useRef(null)
+  const currentMsgId = useRef(null)
 
   const updateCurrentAgent = useCallback((patch) => {
     setMessages(prev => {
@@ -111,10 +106,8 @@ export default function App() {
     })
   }, [])
 
-  // Scroll to bottom on new messages
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // Fetch health on load
   useEffect(() => {
     fetch('/api/health').then(r => r.json()).then(setHealth).catch(() => {})
   }, [])
@@ -149,7 +142,6 @@ export default function App() {
       return
     }
 
-    // status / step — append to current agent message logs
     if (currentMsgId.current) {
       setMessages(prev => prev.map(m =>
         m.id === currentMsgId.current
@@ -180,10 +172,8 @@ export default function App() {
     const goal = input.trim()
     if (!goal || running || !connected) return
 
-    // Add user message
     setMessages(prev => [...prev, { id: Date.now(), role: 'user', content: goal }])
 
-    // Add placeholder agent message
     const agentId = Date.now() + 1
     currentMsgId.current = agentId
     setMessages(prev => [...prev, { id: agentId, role: 'agent', content: '', logs: [], running: true }])
@@ -201,29 +191,25 @@ export default function App() {
   const currentProvider = PROVIDERS.find(p => p.id === provider)
 
   return (
-    <div className="flex flex-col h-screen bg-gray-950">
-
-      {/* ── Header ── */}
-      <header className="flex items-center gap-3 px-5 py-3 border-b border-gray-800 bg-gray-900">
-        <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
+    <div className="flex flex-col h-screen bg-slate-50 text-slate-900">
+      <header className="flex items-center gap-3 px-4 sm:px-5 py-3 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center shadow-sm">
           <Globe size={16} className="text-white" />
         </div>
-        <div>
-          <h1 className="font-semibold text-sm text-white">AgenticWeb</h1>
-          <p className="text-xs text-gray-500">LangGraph · MCP · Autonomous web agent</p>
+        <div className="min-w-0">
+          <h1 className="font-semibold text-sm text-slate-950">AgenticWeb</h1>
+          <p className="text-xs text-slate-500 truncate">LangGraph + MCP autonomous web agent</p>
         </div>
 
-        {/* Connection status */}
-        <div className="ml-auto flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
-          <span className="text-xs text-gray-500">{connected ? 'connected' : 'reconnecting…'}</span>
+        <div className="ml-auto hidden sm:flex items-center gap-2 rounded-full border border-slate-200 px-2.5 py-1">
+          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <span className="text-xs text-slate-500">{connected ? 'connected' : 'reconnecting...'}</span>
         </div>
 
-        {/* Canvas toggle */}
         {canvasImg && (
           <button
             onClick={() => setCanvasOpen(v => !v)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${canvasOpen ? 'bg-violet-900/40 border-violet-700 text-violet-400' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-300'}`}
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${canvasOpen ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'}`}
             title={canvasOpen ? 'Close canvas' : 'Open canvas'}
           >
             <Maximize2 size={12} />
@@ -231,27 +217,26 @@ export default function App() {
           </button>
         )}
 
-        {/* Provider picker */}
-        <div className="relative ml-3">
+        <div className="relative">
           <button
             onClick={() => setShowProv(v => !v)}
-            className="flex items-center gap-2 text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg border border-gray-700 transition-colors"
+            className="flex items-center gap-2 text-xs bg-white hover:bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors shadow-sm"
           >
-            <Zap size={12} className="text-violet-400" />
-            <span className="text-gray-300">{currentProvider?.label}</span>
-            {currentProvider?.free && <span className="text-green-400 text-[10px]">free</span>}
-            <ChevronDown size={12} className="text-gray-500" />
+            <Zap size={12} className="text-amber-500" />
+            <span className="text-slate-700 hidden sm:inline">{currentProvider?.label}</span>
+            {currentProvider?.free && <span className="text-emerald-600 text-[10px]">free</span>}
+            <ChevronDown size={12} className="text-slate-400" />
           </button>
 
           {showProviders && (
-            <div className="absolute right-0 top-9 w-52 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 py-1">
+            <div className="absolute right-0 top-9 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1">
               {PROVIDERS.map(p => (
                 <button key={p.id}
                   onClick={() => { setProvider(p.id); setShowProv(false); send({ type: 'set_provider', provider: p.id }) }}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 flex justify-between items-center transition-colors ${p.id === provider ? 'text-violet-400' : 'text-gray-300'}`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex justify-between items-center transition-colors ${p.id === provider ? 'text-slate-950 font-medium' : 'text-slate-600'}`}
                 >
                   {p.label}
-                  {p.free && <span className="text-xs text-green-400">free</span>}
+                  {p.free && <span className="text-xs text-emerald-600">free</span>}
                 </button>
               ))}
             </div>
@@ -259,73 +244,67 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Main content + Canvas ── */}
       <div className="flex flex-1 overflow-hidden">
-
-      {/* ── Messages ── */}
-      <main className={`overflow-y-auto px-4 py-6 space-y-6 scrollbar-thin ${canvasOpen ? 'w-1/2' : 'flex-1'}`} onClick={() => setShowProv(false)}>
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-8 text-center">
-            <div>
-              <div className="w-16 h-16 rounded-2xl bg-violet-900/50 flex items-center justify-center mx-auto mb-4">
-                <Globe size={32} className="text-violet-400" />
+        <main className={`overflow-y-auto px-4 py-6 space-y-6 scrollbar-thin ${canvasOpen ? 'hidden lg:block lg:w-1/2' : 'flex-1'}`} onClick={() => setShowProv(false)}>
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center min-h-full gap-8 text-center">
+              <div>
+                <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
+                  <Globe size={30} className="text-slate-900" />
+                </div>
+                <h2 className="text-2xl font-semibold text-slate-950 mb-2">What should we handle?</h2>
+                <p className="text-slate-500 text-sm max-w-md">
+                  Give AgenticWeb a goal. It can browse, extract, compare, and report back while you stay in flow.
+                </p>
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">AgenticWeb</h2>
-              <p className="text-gray-400 text-sm max-w-md">
-                Type a goal. I'll browse the web, extract data, and get it done — no clicking required.
-              </p>
-            </div>
 
-            {/* Suggestions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl w-full">
-              {SUGGESTIONS.map((s, i) => (
-                <button key={i}
-                  onClick={() => setInput(s)}
-                  className="text-left text-sm text-gray-400 bg-gray-800/60 hover:bg-gray-800 border border-gray-700 hover:border-violet-600 rounded-xl px-4 py-3 transition-all"
-                >
-                  {s}
-                </button>
-              ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-2xl w-full">
+                {SUGGESTIONS.map((s, i) => (
+                  <button key={i}
+                    onClick={() => setInput(s)}
+                    className="text-left text-sm text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-4 py-3 transition-all shadow-sm"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {messages.map(msg => <Message key={msg.id} msg={msg} />)}
+          <div ref={bottomRef} />
+        </main>
+
+        {canvasOpen && canvasImg && (
+          <aside className="w-full lg:w-1/2 border-l border-slate-200 bg-white flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Live Browser</span>
+              <button onClick={() => setCanvasOpen(false)} className="text-slate-400 hover:text-slate-900 transition-colors" title="Close canvas">
+                <Minimize2 size={14} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden p-3 bg-slate-100">
+              <img
+                src={`data:image/jpeg;base64,${canvasImg}`}
+                alt="Browser screenshot"
+                className="w-full h-full object-contain rounded-lg border border-slate-200 bg-white"
+              />
+            </div>
+          </aside>
         )}
-
-        {messages.map(msg => <Message key={msg.id} msg={msg} />)}
-        <div ref={bottomRef} />
-      </main>
-
-      {/* ── Canvas sidebar ── */}
-      {canvasOpen && canvasImg && (
-        <aside className="w-1/2 border-l border-gray-800 bg-gray-900 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Live Browser</span>
-            <button onClick={() => setCanvasOpen(false)} className="text-gray-500 hover:text-gray-300 transition-colors" title="Close canvas">
-              <Minimize2 size={14} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-hidden p-2">
-            <img
-              src={`data:image/jpeg;base64,${canvasImg}`}
-              alt="Browser screenshot"
-              className="w-full h-full object-contain rounded-lg border border-gray-700"
-            />
-          </div>
-        </aside>
-      )}
       </div>
 
-      {/* ── Input ── */}
-      <footer className="px-4 py-4 border-t border-gray-800 bg-gray-900">
+      <footer className="px-4 py-4 border-t border-slate-200 bg-white">
         <div className="max-w-3xl mx-auto flex gap-3 items-end">
           <textarea
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Type a goal… (Enter to send)"
+            placeholder="Type a goal... (Enter to send)"
             disabled={running || !connected}
             rows={1}
-            className="flex-1 bg-gray-800 border border-gray-700 focus:border-violet-500 text-gray-100 placeholder-gray-500 rounded-xl px-4 py-3 text-sm resize-none outline-none transition-colors disabled:opacity-50"
+            className="flex-1 bg-slate-50 border border-slate-200 focus:border-slate-400 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 text-sm resize-none outline-none transition-colors disabled:opacity-50"
             style={{ maxHeight: 120 }}
           />
           {running && (
@@ -333,7 +312,7 @@ export default function App() {
               onClick={stop}
               disabled={!connected}
               title="Stop task"
-              className="w-11 h-11 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl flex items-center justify-center transition-colors shrink-0"
+              className="w-11 h-11 bg-red-600 hover:bg-red-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center transition-colors shrink-0"
             >
               <Square size={16} />
             </button>
@@ -342,13 +321,13 @@ export default function App() {
             onClick={submit}
             disabled={running || !input.trim() || !connected}
             title="Send"
-            className="w-11 h-11 bg-violet-600 hover:bg-violet-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl flex items-center justify-center transition-colors shrink-0"
+            className="w-11 h-11 bg-slate-900 hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl flex items-center justify-center transition-colors shrink-0"
           >
             <Send size={16} />
           </button>
         </div>
-        <p className="text-center text-xs text-gray-600 mt-2">
-          AgenticWeb · LangGraph + MCP · Built for Microsoft Build Hackathon 2025
+        <p className="text-center text-xs text-slate-400 mt-2">
+          AgenticWeb + LangGraph + MCP + Built for Microsoft Build Hackathon 2025
         </p>
       </footer>
     </div>

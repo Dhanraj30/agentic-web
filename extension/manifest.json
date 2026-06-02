@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AgenticWeb",
   "version": "1.0.0",
-  "description": "Autonomous web agent — type a goal, watch it work",
+  "description": "Autonomous web agent - type a goal, watch it work",
   "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
   "host_permissions": ["http://localhost:8000/*", "http://localhost:8765/*", "<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },

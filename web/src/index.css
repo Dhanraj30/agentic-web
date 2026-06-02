@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-body { @apply bg-gray-950 text-gray-100 font-sans; }
+body { @apply bg-slate-50 text-slate-900 font-sans antialiased; }
 
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-gray-700 rounded-full; }
+.scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full; }

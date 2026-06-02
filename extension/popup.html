@@ -4,37 +4,40 @@
 <meta charset="UTF-8">
 <title>AgenticWeb</title>
 <style>
+:root{color-scheme:light;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc;--brand:#0f172a;--accent:#0284c7;--ok:#059669;--bad:#dc2626}
 *{box-sizing:border-box;margin:0;padding:0}
-body{width:290px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;color:#e5e5e5;background:#0f0f13}
-.header{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#7c3aed}
-.logo{width:22px;height:22px;background:rgba(255,255,255,.2);border-radius:5px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
-h1{font-size:14px;font-weight:600;color:#fff;flex:1}
-.sub{font-size:11px;color:rgba(255,255,255,.6)}
-.body{padding:14px}
-textarea{width:100%;height:70px;font-size:12px;padding:8px 10px;border:1px solid #374151;border-radius:8px;resize:none;font-family:inherit;background:#18181f;color:#e5e5e5;line-height:1.5}
-textarea:focus{outline:none;border-color:#7c3aed}
-.row{display:flex;gap:8px;margin-top:8px;align-items:center}
-select{flex:1;font-size:11px;padding:5px 8px;border:1px solid #374151;border-radius:6px;background:#18181f;color:#e5e5e5}
-.run{padding:5px 14px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500}
-.run:hover{background:#6d28d9}
-.open{display:block;width:100%;margin-top:10px;padding:7px;text-align:center;font-size:11px;color:#a78bfa;border:1px solid #4c1d95;border-radius:6px;cursor:pointer;background:transparent}
-.open:hover{background:#1e1b4b}
-.status{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:#6b7280}
-.dot{width:7px;height:7px;border-radius:50%;background:#374151}
-.dot.on{background:#22c55e} .dot.off{background:#ef4444}
+body{width:320px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;color:var(--ink);background:#fff}
+.header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:#fff}
+.logo{width:30px;height:30px;background:var(--brand);border-radius:8px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;letter-spacing:.02em}
+h1{font-size:14px;font-weight:700;color:var(--ink);line-height:1.2}
+.sub{font-size:11px;color:var(--muted);margin-top:1px}
+.body{padding:14px 16px 16px;background:var(--soft)}
+textarea{width:100%;height:84px;font-size:12px;padding:10px 11px;border:1px solid var(--line);border-radius:10px;resize:none;font-family:inherit;background:#fff;color:var(--ink);line-height:1.45;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+textarea:focus{outline:none;border-color:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18)}
+.row{display:flex;gap:8px;margin-top:10px;align-items:center}
+select{min-width:0;flex:1;font-size:11px;padding:8px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.run{width:40px;height:34px;background:var(--brand);color:#fff;border:none;border-radius:9px;cursor:pointer;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.run:hover{background:#1e293b}
+.open{display:block;width:100%;margin-top:10px;padding:9px;text-align:center;font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:9px;cursor:pointer;background:#fff;font-weight:600}
+.open:hover{border-color:#cbd5e1;background:#f8fafc}
+.status{display:flex;align-items:center;gap:7px;margin-top:11px;font-size:11px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:#94a3b8}
+.dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
 </style>
 </head>
 <body>
 <div class="header">
   <div class="logo">AW</div>
-  <h1>AgenticWeb</h1>
-  <span class="sub">web agent</span>
+  <div>
+    <h1>AgenticWeb</h1>
+    <div class="sub">Autonomous web agent</div>
+  </div>
 </div>
 <div class="body">
-  <textarea id="goal" placeholder="Type a goal…&#10;e.g. Find cheapest BLR→GOA flight"></textarea>
+  <textarea id="goal" placeholder="Type a goal...&#10;e.g. Find cheapest BLR to GOA flight"></textarea>
   <div class="row">
     <select id="prov">
-      <option value="azure_openai">Azure OpenAI (Microsoft)</option>
+      <option value="azure_openai">Azure OpenAI</option>
       <option value="gemini">Gemini (free)</option>
       <option value="openrouter_qwen">OpenRouter Qwen (free)</option>
       <option value="openrouter_free">OpenRouter Free Router</option>
@@ -44,10 +47,10 @@ select{flex:1;font-size:11px;padding:5px 8px;border:1px solid #374151;border-rad
       <option value="claude">Claude</option>
       <option value="openai">OpenAI</option>
     </select>
-    <button class="run" onclick="run()">Run ➤</button>
+    <button class="run" title="Run" onclick="run()">&#8594;</button>
   </div>
-  <button class="open" onclick="openSidebar()">Open full sidebar ↗</button>
-  <div class="status"><span class="dot" id="dot"></span><span id="stxt">Checking…</span></div>
+  <button class="open" onclick="openSidebar()">Open sidebar</button>
+  <div class="status"><span class="dot" id="dot"></span><span id="stxt">Checking...</span></div>
 </div>
 <script>
 document.addEventListener('DOMContentLoaded',()=>{ check(); load() })
@@ -69,10 +72,10 @@ async function check(){
     const r=await fetch('http://localhost:8765/health',{signal:AbortSignal.timeout(2000)})
     const d=await r.json()
     document.getElementById('dot').className='dot on'
-    document.getElementById('stxt').textContent=`Ready · ${d.providers?.default||'gemini'}`
+    document.getElementById('stxt').textContent=`Ready - ${d.providers?.default||'gemini'}`
   }catch{
     document.getElementById('dot').className='dot off'
-    document.getElementById('stxt').textContent='Offline — run ./scripts/start.sh'
+    document.getElementById('stxt').textContent='Offline - run ./scripts/start.sh'
   }
 }
 </script>
