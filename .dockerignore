@@ -1,0 +1,13 @@
+.git
+.env
+.venv
+agent/.venv
+agent/data/*.db
+agent/data/*.db-*
+agent/data/cooldown_state.json
+web/node_modules
+web/dist
+*.log
+.pids
+__pycache__
+*.pyc
