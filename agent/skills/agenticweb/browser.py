@@ -5,6 +5,7 @@ Playwright-based browser automation for the MCP tool layer.
 from __future__ import annotations
 import logging
 import os
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,16 @@ async def _get_page():
     if _page is None or _page.is_closed():
         from playwright.async_api import async_playwright
         headless = os.getenv("BROWSER_HEADLESS", "true").lower() == "true"
+        if not headless and sys.platform != "win32" and not os.getenv("DISPLAY"):
+            logger.warning("BROWSER_HEADLESS=false but no DISPLAY is available; forcing headless Chromium.")
+            headless = True
         slow_mo = int(os.getenv("BROWSER_SLOW_MO_MS", "0"))
         _pw = await async_playwright().start()
-        _browser = await _pw.chromium.launch(headless=headless, slow_mo=slow_mo)
+        _browser = await _pw.chromium.launch(
+            headless=headless,
+            slow_mo=slow_mo,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         ctx = await _browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             viewport={"width": 1280, "height": 800},
@@ -138,11 +146,18 @@ async def extract(instruction: str, llm_router=None) -> dict:
 async def take_screenshot() -> str:
     page = await _get_page()
     try:
-        b64 = await page.screenshot(type="jpeg", quality=40, full_page=False)
         import base64
-        return base64.b64encode(b64).decode()
+        timeout = int(os.getenv("BROWSER_SCREENSHOT_TIMEOUT_MS", "5000"))
+        data = await page.screenshot(type="jpeg", quality=45, full_page=False, timeout=timeout)
+        return base64.b64encode(data).decode()
     except Exception as e:
-        logger.warning("Screenshot failed: %s", e)
+        logger.warning("Screenshot failed through Playwright API, trying CDP fallback: %s", e)
+        try:
+            client = await page.context.new_cdp_session(page)
+            result = await client.send("Page.captureScreenshot", {"format": "jpeg", "quality": 45})
+            return result.get("data", "")
+        except Exception as cdp_error:
+            logger.warning("Screenshot failed through CDP fallback: %s", cdp_error)
         return ""
 
 

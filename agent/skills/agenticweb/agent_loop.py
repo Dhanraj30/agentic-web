@@ -151,26 +151,30 @@ async def summarise_node(state: AgentState, config: RunnableConfig) -> dict:
         return {"final_answer": answer}
 
     await q.put({"type": "status", "message": "Compiling final answer…"})
-    msgs = list(state["messages"])
-    if len(msgs) > 4:
-        msgs = [msgs[0]] + msgs[-3:]
     evidence = _tool_evidence(state)
     evidence_block = _format_evidence_block(evidence)
     ctx = context_manager.get(state["session_id"])
     structured_notes = _format_notes_for_summary(ctx.notes if ctx else {})
-    msgs.append(HumanMessage(content=(
-        f"Goal: {state['goal']}\n"
-        f"Structured session notes:\n{structured_notes}\n\n"
-        f"Tool evidence gathered across the whole run:\n{evidence_block}\n\n"
-        "Write the final answer using only the tool evidence in this conversation.\n"
-        "Rules:\n"
-        "- Do not invent prices, dates, availability, rankings, source names, company tags, execution output, or hidden page data.\n"
-        "- If a page requires login or premium access, say that directly and do not guess hidden data.\n"
-        "- Mention live prices only when the user asked for prices or the evidence contains prices.\n"
-        "- Include source URLs beside each claim when possible.\n"
-        "- If comparison/data collection is incomplete, say exactly what was checked and what remains unverified.\n"
-        "- Format cleanly with: Result, Sources Checked, Limitations."
-    )))
+    msgs = [
+        SystemMessage(content=(
+            "You are writing a final answer for a web-agent task. "
+            "Use only the supplied session notes and tool evidence. "
+            "Do not infer hidden availability, live prices, dates, or source details."
+        )),
+        HumanMessage(content=(
+            f"Goal: {state['goal']}\n"
+            f"Structured session notes:\n{structured_notes}\n\n"
+            f"Tool evidence gathered across the whole run:\n{evidence_block}\n\n"
+            "Write the final answer using only the tool evidence in this conversation.\n"
+            "Rules:\n"
+            "- Do not invent prices, dates, availability, rankings, source names, company tags, execution output, or hidden page data.\n"
+            "- If a page requires login or premium access, say that directly and do not guess hidden data.\n"
+            "- Mention live prices only when the user asked for prices or the evidence contains prices.\n"
+            "- Include source URLs beside each claim when possible.\n"
+            "- If comparison/data collection is incomplete, say exactly what was checked and what remains unverified.\n"
+            "- Format cleanly with: Result, Sources Checked, Limitations."
+        )),
+    ]
     try:
         response = await _invoke_with_provider_fallback(
             messages=msgs,
@@ -270,7 +274,10 @@ async def _invoke_with_provider_fallback(
             llm = build_langchain_llm(candidate)
             if tools:
                 llm = llm.bind_tools(tools)
-            result = await asyncio.wait_for(llm.ainvoke(messages), timeout=float(os.getenv("LLM_CALL_TIMEOUT_SECONDS", "35")))
+            result = await asyncio.wait_for(
+                llm.ainvoke(_normalize_messages_for_provider(messages)),
+                timeout=float(os.getenv("LLM_CALL_TIMEOUT_SECONDS", "35")),
+            )
             served_model = getattr(result, "response_metadata", {}).get("model_name")
             if served_model:
                 logger.info("Provider %s served by model %s", candidate, served_model)
@@ -290,6 +297,28 @@ async def _invoke_with_provider_fallback(
     if last_error:
         raise last_error
     raise RuntimeError("No configured LLM provider is available.")
+
+
+def _normalize_messages_for_provider(messages: list[BaseMessage]) -> list[BaseMessage]:
+    normalized: list[BaseMessage] = []
+    for message in messages:
+        if isinstance(message, AIMessage) and getattr(message, "tool_calls", None):
+            additional_kwargs = dict(getattr(message, "additional_kwargs", {}) or {})
+            additional_kwargs.pop("function_call", None)
+            normalized.append(
+                AIMessage(
+                    content=message.content,
+                    additional_kwargs=additional_kwargs,
+                    response_metadata=dict(getattr(message, "response_metadata", {}) or {}),
+                    name=getattr(message, "name", None),
+                    id=getattr(message, "id", None),
+                    tool_calls=list(getattr(message, "tool_calls", []) or []),
+                    invalid_tool_calls=list(getattr(message, "invalid_tool_calls", []) or []),
+                )
+            )
+        else:
+            normalized.append(message)
+    return normalized
 
 
 def _fallback_summary(state: AgentState, reason: str = "The agent could not complete the final LLM summary.") -> str:

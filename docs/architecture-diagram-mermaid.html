@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Detailed Architecture Diagram</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      min-width: 2600px;
+      min-height: 1900px;
+      background: #17191c;
+      color: #d4d4d4;
+      font-family: Arial, sans-serif;
+    }
+
+    .wrap {
+      padding: 28px;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: #d8d8d8;
+    }
+
+    .mermaid {
+      display: inline-block;
+      background: #17191c;
+      padding: 24px;
+    }
+  </style>
+  <script type="module">
+    import mermaid from "../web/node_modules/mermaid/dist/mermaid.esm.min.mjs";
+
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      securityLevel: "loose",
+      flowchart: {
+        htmlLabels: true,
+        curve: "basis",
+        nodeSpacing: 55,
+        rankSpacing: 80
+      },
+      themeVariables: {
+        background: "#17191c",
+        mainBkg: "#1d2024",
+        secondBkg: "#1d2024",
+        primaryColor: "#1d2024",
+        primaryTextColor: "#d8d8d8",
+        primaryBorderColor: "#343a42",
+        lineColor: "#3f464f",
+        clusterBkg: "#191c20",
+        clusterBorder: "#303640",
+        edgeLabelBackground: "#17191c",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "15px"
+      }
+    });
+  </script>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Detailed Architecture Diagram</h1>
+    <pre class="mermaid">
+flowchart TB
+    User["User"]
+
+    subgraph Clients["Client Channels"]
+        WebUI["React Web UI&lt;br/&gt;web/src/App.jsx"]
+        ChromeExt["Chrome Extension&lt;br/&gt;extension/background.js&lt;br/&gt;extension/content.js"]
+        Telegram["Telegram Bot"]
+        RESTClient["REST / SSE Client"]
+    end
+
+    subgraph Frontend["Web Frontend: web/"]
+        Vite["Vite Dev Server&lt;br/&gt;:3000"]
+        App["App.jsx&lt;br/&gt;Chat UI, Provider Picker,&lt;br/&gt;Live Canvas Viewer"]
+        SocketHook["useAgentSocket.js&lt;br/&gt;WebSocket client&lt;br/&gt;Ping + reconnect"]
+    end
+
+    subgraph Gateway["Gateway API: gateway/main.py&lt;br/&gt;FastAPI :8000"]
+        WS["WS /ws/{session_id}"]
+        ChatAPI["POST /api/chat&lt;br/&gt;SSE stream"]
+        Health["GET /api/health"]
+        Providers["GET /api/providers"]
+        Sessions["SessionRegistry&lt;br/&gt;in-memory sessions"]
+        TelegramWebhook["POST /telegram/webhook"]
+        Cancel["POST /api/sessions/{id}/cancel"]
+    end
+
+    subgraph AgentServer["Direct Agent API: agent/server.py&lt;br/&gt;FastAPI :8765"]
+        RunAPI["POST /run&lt;br/&gt;SSE stream"]
+        AgentHealth["GET /health"]
+        GraphAPI["GET /graph"]
+        MCPInfo["GET /mcp-tools"]
+    end
+
+    subgraph Runtime["Agent Runtime: agent/skills/agenticweb/"]
+        RunAgent["run_agent()"]
+        LangGraph["LangGraph State Machine"]
+        Act["ACT node&lt;br/&gt;LLM chooses next action"]
+        Observe["OBSERVE node&lt;br/&gt;Executes tool calls"]
+        Summarise["SUMMARISE node&lt;br/&gt;Final grounded answer"]
+        Context["ContextManager&lt;br/&gt;notes, refs, compaction"]
+        Memory["memory.py&lt;br/&gt;SQLite persistence"]
+        Router["llm_router.py&lt;br/&gt;provider fallback"]
+        Cooldown["cooldown.py&lt;br/&gt;provider cooldown state"]
+    end
+
+    subgraph Tools["Tool Layer"]
+        ToolAdapter["mcp_tools/client.py&lt;br/&gt;LangChain BaseTool adapter"]
+        MCPServer["mcp_tools/server.py&lt;br/&gt;MCP stdio compatibility"]
+        Browser["browser.py&lt;br/&gt;Playwright Chromium"]
+        Scraper["scraper.py&lt;br/&gt;httpx + BeautifulSoup"]
+    end
+
+    subgraph Storage["Local Persistent State"]
+        SQLite["agent/data/memory.db&lt;br/&gt;sessions, steps, facts,&lt;br/&gt;summaries, context notes, refs"]
+        CooldownFile["agent/data/cooldown_state.json"]
+    end
+
+    subgraph External["External Systems"]
+        LLMs["LLM Providers&lt;br/&gt;Gemini, GitHub Models, Groq,&lt;br/&gt;OpenRouter, Azure OpenAI,&lt;br/&gt;OpenAI, Claude, DeepSeek"]
+        DuckDuckGo["DuckDuckGo HTML Search"]
+        Websites["Target Websites"]
+        TelegramAPI["Telegram Bot API"]
+    end
+
+    User --&gt; WebUI
+    User --&gt; ChromeExt
+    User --&gt; Telegram
+    User --&gt; RESTClient
+
+    WebUI --&gt; Vite
+    Vite --&gt; App
+    App --&gt; SocketHook
+    SocketHook --&gt; WS
+
+    ChromeExt --&gt; RunAPI
+    ChromeExt --&gt; AgentServer
+    RESTClient --&gt; ChatAPI
+    Telegram --&gt; TelegramWebhook
+
+    WS --&gt; Sessions
+    ChatAPI --&gt; Sessions
+    TelegramWebhook --&gt; Sessions
+    Cancel --&gt; Sessions
+
+    Gateway --&gt; RunAgent
+    RunAPI --&gt; RunAgent
+
+    RunAgent --&gt; Memory
+    RunAgent --&gt; Context
+    RunAgent --&gt; LangGraph
+
+    LangGraph --&gt; Act
+    Act --&gt; Router
+    Router --&gt; Cooldown
+    Router --&gt; LLMs
+
+    Act --&gt; Observe
+    Observe --&gt; ToolAdapter
+    ToolAdapter --&gt; Browser
+    ToolAdapter --&gt; Scraper
+    ToolAdapter --&gt; MCPServer
+
+    Browser --&gt; Websites
+    Browser --&gt; Observe
+    Scraper --&gt; DuckDuckGo
+    Scraper --&gt; Websites
+    Scraper --&gt; Observe
+
+    Observe --&gt; Context
+    Observe --&gt; Memory
+    Observe --&gt; Summarise
+    Summarise --&gt; Router
+    Summarise --&gt; Memory
+
+    Memory --&gt; SQLite
+    Cooldown --&gt; CooldownFile
+
+    Gateway --&gt; WebUI
+    Gateway --&gt; TelegramAPI
+    AgentServer --&gt; ChromeExt
+    </pre>
+  </main>
+</body>
+</html>

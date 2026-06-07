@@ -1,0 +1,120 @@
+flowchart TB
+    User["User"]
+
+    subgraph Clients["Client Channels"]
+        WebUI["React Web UI<br/>web/src/App.jsx"]
+        ChromeExt["Chrome Extension<br/>extension/background.js<br/>extension/content.js"]
+        Telegram["Telegram Bot"]
+        RESTClient["REST / SSE Client"]
+    end
+
+    subgraph Frontend["Web Frontend: web/"]
+        Vite["Vite Dev Server<br/>:3000"]
+        App["App.jsx<br/>Chat UI, Provider Picker,<br/>Live Canvas Viewer"]
+        SocketHook["useAgentSocket.js<br/>WebSocket client<br/>Ping + reconnect"]
+    end
+
+    subgraph Gateway["Gateway API: gateway/main.py<br/>FastAPI :8000"]
+        WS["WS /ws/{session_id}"]
+        ChatAPI["POST /api/chat<br/>SSE stream"]
+        Health["GET /api/health"]
+        Providers["GET /api/providers"]
+        Sessions["SessionRegistry<br/>in-memory sessions"]
+        TelegramWebhook["POST /telegram/webhook"]
+        Cancel["POST /api/sessions/{id}/cancel"]
+    end
+
+    subgraph AgentServer["Direct Agent API: agent/server.py<br/>FastAPI :8765"]
+        RunAPI["POST /run<br/>SSE stream"]
+        AgentHealth["GET /health"]
+        GraphAPI["GET /graph"]
+        MCPInfo["GET /mcp-tools"]
+    end
+
+    subgraph Runtime["Agent Runtime: agent/skills/agenticweb/"]
+        RunAgent["run_agent()"]
+        LangGraph["LangGraph State Machine"]
+        Act["ACT node<br/>LLM chooses next action"]
+        Observe["OBSERVE node<br/>Executes tool calls"]
+        Summarise["SUMMARISE node<br/>Final grounded answer"]
+        Context["ContextManager<br/>notes, refs, compaction"]
+        Memory["memory.py<br/>SQLite persistence"]
+        Router["llm_router.py<br/>provider fallback"]
+        Cooldown["cooldown.py<br/>provider cooldown state"]
+    end
+
+    subgraph Tools["Tool Layer"]
+        ToolAdapter["mcp_tools/client.py<br/>LangChain BaseTool adapter"]
+        MCPServer["mcp_tools/server.py<br/>MCP stdio compatibility"]
+        Browser["browser.py<br/>Playwright Chromium"]
+        Scraper["scraper.py<br/>httpx + BeautifulSoup"]
+    end
+
+    subgraph Storage["Local Persistent State"]
+        SQLite["agent/data/memory.db<br/>sessions, steps, facts,<br/>summaries, context notes, refs"]
+        CooldownFile["agent/data/cooldown_state.json"]
+    end
+
+    subgraph External["External Systems"]
+        LLMs["LLM Providers<br/>Gemini, GitHub Models, Groq,<br/>OpenRouter, Azure OpenAI,<br/>OpenAI, Claude, DeepSeek"]
+        DuckDuckGo["DuckDuckGo HTML Search"]
+        Websites["Target Websites"]
+        TelegramAPI["Telegram Bot API"]
+    end
+
+    User --> WebUI
+    User --> ChromeExt
+    User --> Telegram
+    User --> RESTClient
+
+    WebUI --> Vite
+    Vite --> App
+    App --> SocketHook
+    SocketHook --> WS
+
+    ChromeExt --> RunAPI
+    ChromeExt --> AgentServer
+    RESTClient --> ChatAPI
+    Telegram --> TelegramWebhook
+
+    WS --> Sessions
+    ChatAPI --> Sessions
+    TelegramWebhook --> Sessions
+    Cancel --> Sessions
+
+    Gateway --> RunAgent
+    RunAPI --> RunAgent
+
+    RunAgent --> Memory
+    RunAgent --> Context
+    RunAgent --> LangGraph
+
+    LangGraph --> Act
+    Act --> Router
+    Router --> Cooldown
+    Router --> LLMs
+
+    Act --> Observe
+    Observe --> ToolAdapter
+    ToolAdapter --> Browser
+    ToolAdapter --> Scraper
+    ToolAdapter --> MCPServer
+
+    Browser --> Websites
+    Browser --> Observe
+    Scraper --> DuckDuckGo
+    Scraper --> Websites
+    Scraper --> Observe
+
+    Observe --> Context
+    Observe --> Memory
+    Observe --> Summarise
+    Summarise --> Router
+    Summarise --> Memory
+
+    Memory --> SQLite
+    Cooldown --> CooldownFile
+
+    Gateway --> WebUI
+    Gateway --> TelegramAPI
+    AgentServer --> ChromeExt
