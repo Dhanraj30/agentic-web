@@ -300,6 +300,7 @@ async def _invoke_with_provider_fallback(
 
 
 def _normalize_messages_for_provider(messages: list[BaseMessage]) -> list[BaseMessage]:
+    messages = _drop_dangling_tool_messages(messages)
     normalized: list[BaseMessage] = []
     for message in messages:
         if isinstance(message, AIMessage) and getattr(message, "tool_calls", None):
@@ -318,6 +319,29 @@ def _normalize_messages_for_provider(messages: list[BaseMessage]) -> list[BaseMe
             )
         else:
             normalized.append(message)
+    return normalized
+
+
+def _drop_dangling_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """OpenAI-compatible APIs require every ToolMessage to follow its AI tool call."""
+    normalized: list[BaseMessage] = []
+    pending_tool_ids: set[str] = set()
+
+    for message in messages:
+        if isinstance(message, ToolMessage):
+            tool_call_id = str(getattr(message, "tool_call_id", "") or "")
+            if tool_call_id and tool_call_id in pending_tool_ids:
+                normalized.append(message)
+                pending_tool_ids.discard(tool_call_id)
+            continue
+
+        normalized.append(message)
+        if isinstance(message, AIMessage):
+            for tool_call in getattr(message, "tool_calls", []) or []:
+                tool_id = str(tool_call.get("id") or "")
+                if tool_id:
+                    pending_tool_ids.add(tool_id)
+
     return normalized
 
 

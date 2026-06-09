@@ -27,41 +27,57 @@ async def _get_page():
         _browser = await _pw.chromium.launch(
             headless=headless,
             slow_mo=slow_mo,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-web-security",
+                "--ignore-certificate-errors",
+            ],
         )
         ctx = await _browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
             viewport={"width": 1280, "height": 800},
+            locale="en-IN",
+            timezone_id="Asia/Kolkata",
         )
         ctx.set_default_timeout(8000)
         _page = await ctx.new_page()
+        await _page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     return _page
 
 
 async def page_state() -> str:
     page = await _get_page()
-    title = await page.title()
-    url = page.url
-    text = await _visible_text(page, limit=2500)
-    return f"[{title}]\nURL: {url}\n\n{text}"
+    return await _safe_page_state(page, limit=2500)
 
 
 async def navigate(url: str) -> str:
     page = await _get_page()
+    nav_error = ""
     try:
         if url and not url.startswith(("http://", "https://")):
             url = f"https://{url}"
         await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-        await page.wait_for_load_state("networkidle", timeout=8000)
-    except Exception:
-        pass
-
-    try:
-        title = await page.title()
-        content = await _visible_text(page)
-        return f"[{title}]\nURL: {page.url}\n\n{content}"
+        try:
+            await page.wait_for_load_state("networkidle", timeout=8000)
+        except Exception:
+            await page.wait_for_timeout(1200)
     except Exception as e:
-        return f"Error navigating to {url}: {e}"
+        nav_error = str(e).splitlines()[0][:300]
+        try:
+            await page.wait_for_timeout(1200)
+        except Exception:
+            pass
+
+    state = await _safe_page_state(page)
+    if nav_error:
+        return f"Navigation warning for {url}: {nav_error}\n\n{state}"
+    return state
 
 
 async def click(target: str) -> str:
@@ -125,7 +141,10 @@ async def wait(seconds: float = 2.0) -> str:
 
 async def extract(instruction: str, llm_router=None) -> dict:
     page = await _get_page()
-    content = await page.evaluate("() => document.body?.innerText || ''")
+    try:
+        content = await page.evaluate("() => document.body?.innerText || ''")
+    except Exception as e:
+        return {"raw": "", "error": f"Could not read current page: {str(e).splitlines()[0][:300]}", "url": page.url}
     content = " ".join(content.split())[:4000]
     if not llm_router:
         return {"raw": content[:500]}
@@ -148,6 +167,10 @@ async def take_screenshot() -> str:
     try:
         import base64
         timeout = int(os.getenv("BROWSER_SCREENSHOT_TIMEOUT_MS", "5000"))
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=1000)
+        except Exception:
+            pass
         data = await page.screenshot(type="jpeg", quality=45, full_page=False, timeout=timeout)
         return base64.b64encode(data).decode()
     except Exception as e:
@@ -180,6 +203,20 @@ async def _visible_text(page, limit: int = 3500) -> str:
         }
     """)
     return " ".join(content.split())[:limit]
+
+
+async def _safe_page_state(page, limit: int = 3500) -> str:
+    title = ""
+    text = ""
+    try:
+        title = await page.title()
+    except Exception as e:
+        title = f"Unreadable title: {str(e).splitlines()[0][:120]}"
+    try:
+        text = await _visible_text(page, limit=limit)
+    except Exception as e:
+        text = f"Could not read visible text: {str(e).splitlines()[0][:300]}"
+    return f"[{title}]\nURL: {page.url}\n\n{text}"
 
 
 async def _type_into_code_editor(page, text: str) -> str:

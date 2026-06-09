@@ -95,6 +95,7 @@ export default function App() {
   const [health, setHealth] = useState(null)
   const [canvasImg, setCanvasImg] = useState(null)
   const [canvasOpen, setCanvasOpen] = useState(false)
+  const [canvasActivity, setCanvasActivity] = useState('')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const currentMsgId = useRef(null)
@@ -118,8 +119,14 @@ export default function App() {
 
     if (event.type === 'canvas') {
       setCanvasImg(event.data)
+      setCanvasActivity('Live browser frame received')
       setCanvasOpen(true)
       return
+    }
+
+    if (event.type === 'status' && /^(Browsing|Clicking|Typing|Pressing|Waiting|Reading|Extracting)/.test(event.message || '')) {
+      setCanvasActivity(event.message)
+      setCanvasOpen(true)
     }
 
     if (event.type === 'done') {
@@ -207,7 +214,7 @@ export default function App() {
           <span className="text-xs text-slate-500">{connected ? 'connected' : 'reconnecting...'}</span>
         </div>
 
-        {canvasImg && (
+        {(canvasImg || canvasActivity) && (
           <button
             onClick={() => setCanvasOpen(v => !v)}
             className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${canvasOpen ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'}`}
@@ -276,7 +283,7 @@ export default function App() {
           <div ref={bottomRef} />
         </main>
 
-        {canvasOpen && canvasImg && (
+        {canvasOpen && (canvasImg || canvasActivity) && (
           <aside className="w-full lg:w-1/2 border-l border-slate-200 bg-white flex flex-col">
             <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Live Browser</span>
@@ -285,11 +292,21 @@ export default function App() {
               </button>
             </div>
             <div className="flex-1 overflow-hidden p-3 bg-slate-100">
-              <img
-                src={`data:image/jpeg;base64,${canvasImg}`}
-                alt="Browser screenshot"
-                className="w-full h-full object-contain rounded-lg border border-slate-200 bg-white"
-              />
+              {canvasImg ? (
+                <img
+                  src={`data:image/jpeg;base64,${canvasImg}`}
+                  alt="Browser screenshot"
+                  className="w-full h-full object-contain rounded-lg border border-slate-200 bg-white"
+                />
+              ) : (
+                <div className="w-full h-full rounded-lg border border-slate-200 bg-white flex items-center justify-center px-6 text-center">
+                  <div className="space-y-2">
+                    <Loader size={18} className="animate-spin mx-auto text-amber-500" />
+                    <p className="text-sm font-medium text-slate-700">{canvasActivity || 'Starting browser...'}</p>
+                    <p className="text-xs text-slate-400">Waiting for the first remote Chromium frame.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </aside>
         )}
